@@ -106,9 +106,19 @@ public class AddProductPanel extends JPanel {
             }
         });
 
-        // --- SUBMIT BUTTON ---
-        JButton submitBtn = new JButton("ADD ITEM TO INVENTORY");
+        // --- BUTTONS (Submit & Import) ---
+        
+        JButton submitBtn = new JButton("ADD ITEM");
         styleButtonLarge(submitBtn);
+
+        // New Import Button
+        JButton importBtn = new JButton("BULK IMPORT (CSV)");
+        importBtn.setFont(Theme.FONT_TITLE);
+        importBtn.setBackground(Theme.COLOR_ACCENT); // Different color to distinguish
+        importBtn.setForeground(Color.WHITE);
+        importBtn.setPreferredSize(new Dimension(250, 50));
+        importBtn.setFocusPainted(false);
+
         
         JScrollPane scrollPane = new JScrollPane(formPanel);
         scrollPane.setBorder(null);
@@ -117,9 +127,24 @@ public class AddProductPanel extends JPanel {
         JPanel bottomPanel = new JPanel();
         bottomPanel.setBackground(Theme.COLOR_CREAM);
         bottomPanel.add(submitBtn);
+        bottomPanel.add(importBtn); // Add the import button here
         add(bottomPanel, BorderLayout.SOUTH);
 
-        // --- LOGIC: VALIDATION & SAVE ---
+        // --- IMPORT LOGIC ---
+        importBtn.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Select CSV File");
+            fileChooser.setFileFilter(new FileNameExtensionFilter("CSV Files", "csv"));
+            
+            int option = fileChooser.showOpenDialog(this);
+            if (option == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                // Call our helper class to process the CSV
+                CSVImporter.importCSV((JFrame) SwingUtilities.getWindowAncestor(this), file);
+            }
+        });
+
+        // --- SUBMIT LOGIC: VALIDATION & SAVE ---
         submitBtn.addActionListener(e -> {
             
             // 1. Check Text Fields (Name)
@@ -129,8 +154,6 @@ public class AddProductPanel extends JPanel {
             }
 
             // 2. Validate Numbers (Price, Qty, Dimensions)
-            // We use Double.parseDouble to allow decimals (e.g. 10.5)
-            // We use Integer.parseInt for quantity (usually whole numbers)
             double price, height, width, weight;
             int quantity;
 
@@ -141,14 +164,12 @@ public class AddProductPanel extends JPanel {
                 width = Double.parseDouble(wField.getText());
                 weight = Double.parseDouble(weightField.getText());
 
-                // Optional: Ensure they aren't negative
                 if (price < 0 || quantity < 0 || height < 0 || width < 0 || weight < 0) {
-                     JOptionPane.showMessageDialog(this, "Values cannot be negative.");
-                     return;
+                      JOptionPane.showMessageDialog(this, "Values cannot be negative.");
+                      return;
                 }
 
             } catch (NumberFormatException ex) {
-                // This error triggers if they type "abc", leave it empty, or type invalid symbols
                 JOptionPane.showMessageDialog(this, 
                     "Invalid Input!\n\n" +
                     "- Price, Height, Width, and Weight must be numbers (Decimals allowed).\n" +
@@ -206,7 +227,7 @@ public class AddProductPanel extends JPanel {
         b.setFont(Theme.FONT_TITLE);
         b.setBackground(Theme.COLOR_DARK);
         b.setForeground(Color.WHITE);
-        b.setPreferredSize(new Dimension(300, 50));
+        b.setPreferredSize(new Dimension(250, 50));
         b.setFocusPainted(false);
     }
 }

@@ -179,4 +179,15 @@ public class Database {
             return false;
         }
     }
+    // --- IMPORT HELPERS ---
+
+    /**
+     * Finds a product by exact name (case-insensitive) to check for duplicates.
+     */
+    public static Document findProductByName(String name) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return null;
+        // Use regex for case-insensitive search (so "Sofa" matches "sofa")
+        return db.getCollection("products").find(eq("name", java.util.regex.Pattern.compile("^" + name + "$", java.util.regex.Pattern.CASE_INSENSITIVE))).first();
+    }
 }
