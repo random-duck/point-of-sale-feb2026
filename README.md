@@ -1,2 +1,2 @@
 # point-of-sale-feb2026
-Alianne's School Projecy
+Alianne's School Project
