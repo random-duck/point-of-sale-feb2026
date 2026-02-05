@@ -5,7 +5,6 @@ import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.List;
 import org.bson.Document;
-import org.bson.types.ObjectId;
 
 public class CSVImporter {
 
@@ -20,7 +19,7 @@ public class CSVImporter {
     public static class ConflictItem {
         ProductData newData;
         Document existingDoc;
-        String resolution = "Skip"; // Default choice
+        String resolution = "Skip"; 
         
         public ConflictItem(ProductData d, Document e) { newData = d; existingDoc = e; }
     }
@@ -36,9 +35,6 @@ public class CSVImporter {
             String line;
             int rowNum = 0;
             
-            // Skip Header if it exists (simple check: if first col is "Name")
-            // Assuming strict format: Name, Category, Price, Qty, Height, Width, Weight
-            
             while ((line = br.readLine()) != null) {
                 rowNum++;
                 String[] values = line.split(",");
@@ -50,13 +46,16 @@ public class CSVImporter {
                     ProductData p = new ProductData();
                     p.name = values[0].trim();
                     p.category = values[1].trim();
-                    p.price = Double.parseDouble(values[2].trim());
-                    p.quantity = Integer.parseInt(values[3].trim());
                     
-                    // Dimensions (Optional in CSV? Let's assume 0 if missing)
-                    p.h = (values.length > 4) ? Double.parseDouble(values[4].trim()) : 0;
-                    p.w = (values.length > 5) ? Double.parseDouble(values[5].trim()) : 0;
-                    p.weight = (values.length > 6) ? Double.parseDouble(values[6].trim()) : 0;
+                    // --- THE FIX: SMART PARSING ---
+                    // We now use 'cleanDouble' and 'cleanInt' instead of standard parsing
+                    p.price = cleanDouble(values[2]);
+                    p.quantity = cleanInt(values[3]);
+                    
+                    // Dimensions (handle missing columns safely)
+                    p.h = (values.length > 4) ? cleanDouble(values[4]) : 0;
+                    p.w = (values.length > 5) ? cleanDouble(values[5]) : 0;
+                    p.weight = (values.length > 6) ? cleanDouble(values[6]) : 0;
 
                     // CHECK FOR DUPLICATES
                     Document existing = Database.findProductByName(p.name);
@@ -68,7 +67,8 @@ public class CSVImporter {
 
                 } catch (Exception ex) {
                     errorCount++;
-                    errorReport.append("Row ").append(rowNum).append(": Invalid Data (Check Numbers)\n");
+                    // More detailed error message for debugging
+                    errorReport.append("Row ").append(rowNum).append(": Check '").append(values[0]).append("' values. (Err: ").append(ex.getMessage()).append(")\n");
                 }
             }
 
@@ -79,10 +79,9 @@ public class CSVImporter {
                 
                 if (!dialog.isConfirmed()) {
                     JOptionPane.showMessageDialog(parent, "Import Cancelled.");
-                    return; // Stop everything
+                    return; 
                 }
                 
-                // Process resolved conflicts
                 for (ConflictItem item : conflicts) {
                     if (item.resolution.equals("Skip")) continue;
                     
@@ -97,12 +96,10 @@ public class CSVImporter {
                     } 
                     else if (item.resolution.equals("Update Stock (Add)")) {
                         int newTotal = item.existingDoc.getInteger("quantity") + item.newData.quantity;
-                        // Keep old price/details, just update stock
-                        // Note: You might want a specific method for this, but updateProduct works if we reuse old values
                         Database.updateProduct(
                             item.existingDoc.getObjectId("_id"), 
                             item.existingDoc.getString("name"), item.existingDoc.getString("category"), 
-                            item.existingDoc.getDouble("price"), newTotal, // Updated Qty
+                            item.existingDoc.getDouble("price"), newTotal, 
                             item.existingDoc.get("dimensions", Document.class).getDouble("height"),
                             item.existingDoc.get("dimensions", Document.class).getDouble("width"),
                             item.existingDoc.get("dimensions", Document.class).getDouble("weight")
@@ -114,7 +111,6 @@ public class CSVImporter {
 
             // --- 2. ADD NEW ITEMS ---
             for (ProductData p : newItems) {
-                // Image path is empty for bulk import (Option A)
                 Database.addProduct(p.name, p.category, p.price, p.quantity, p.h, p.w, p.weight, ""); 
                 successCount++;
             }
@@ -130,5 +126,27 @@ public class CSVImporter {
             e.printStackTrace();
             JOptionPane.showMessageDialog(parent, "Error reading file: " + e.getMessage());
         }
+    }
+
+    // --- NEW HELPER METHODS ---
+
+    /**
+     * Cleans a string (removes $, PHP, commas) and converts to double.
+     */
+    private static double cleanDouble(String input) throws NumberFormatException {
+        if (input == null || input.trim().isEmpty()) return 0.0;
+        // Remove 'PHP', '$', spaces, and commas
+        String clean = input.replaceAll("[^0-9.]", ""); 
+        return Double.parseDouble(clean);
+    }
+
+    /**
+     * Cleans a string and converts to integer.
+     */
+    private static int cleanInt(String input) throws NumberFormatException {
+        if (input == null || input.trim().isEmpty()) return 0;
+        // Remove everything that isn't a digit
+        String clean = input.replaceAll("[^0-9]", "");
+        return Integer.parseInt(clean);
     }
 }
