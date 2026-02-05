@@ -13,6 +13,7 @@ public class ProductGalleryPanel extends JPanel {
     private JPanel gridPanel;
     private JTextField searchField;
     private JComboBox<String> filterBox;
+    private JScrollPane scrollPane; // We need access to this
 
     public ProductGalleryPanel() {
         setLayout(new BorderLayout());
@@ -44,23 +45,49 @@ public class ProductGalleryPanel extends JPanel {
         add(topBar, BorderLayout.NORTH);
 
         // --- GRID AREA ---
-        gridPanel = new JPanel(new GridLayout(0, 4, 10, 10)); 
+        // Start with 1 column, but it will update instantly
+        gridPanel = new JPanel(new GridLayout(0, 1, 15, 15)); 
         gridPanel.setBackground(Theme.COLOR_CREAM);
         gridPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JScrollPane scrollPane = new JScrollPane(gridPanel);
+        scrollPane = new JScrollPane(gridPanel);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         add(scrollPane, BorderLayout.CENTER);
+
+        // --- THE FIX: RESPONSIVE RESIZING ---
+        // This listener fires whenever you resize the window or sidebar
+        scrollPane.getViewport().addChangeListener(e -> {
+            adjustGridColumns();
+        });
 
         // --- ACTIONS ---
         searchBtn.addActionListener(e -> loadProducts());
         filterBox.addActionListener(e -> loadProducts());
         
+        // Load data when shown
         this.addComponentListener(new java.awt.event.ComponentAdapter() {
-            public void componentShown(java.awt.event.ComponentEvent e) { loadProducts(); }
+            public void componentShown(java.awt.event.ComponentEvent e) { 
+                loadProducts(); 
+                adjustGridColumns(); // Ensure layout is correct on first load
+            }
         });
 
         loadProducts();
+    }
+
+    // New Helper: Calculates how many columns fit
+    private void adjustGridColumns() {
+        int availableWidth = scrollPane.getViewport().getWidth();
+        int cardWidth = 240; // 220px card + 20px gap cushion
+        
+        if (availableWidth > 0) {
+            int cols = Math.max(1, availableWidth / cardWidth);
+            GridLayout gl = (GridLayout) gridPanel.getLayout();
+            if (gl.getColumns() != cols) {
+                gl.setColumns(cols);
+                gridPanel.revalidate();
+            }
+        }
     }
 
     private void loadProducts() {
@@ -73,6 +100,7 @@ public class ProductGalleryPanel extends JPanel {
         for (Document p : products) {
             if (!search.isEmpty() && !p.getString("name").toLowerCase().contains(search)) continue;
 
+            // Wrapper keeps the card centered in its grid cell
             JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
             wrapper.setBackground(Theme.COLOR_CREAM);
             wrapper.add(createProductCard(p));
@@ -80,12 +108,6 @@ public class ProductGalleryPanel extends JPanel {
             gridPanel.add(wrapper);
         }
         
-        while (gridPanel.getComponentCount() < 4) {
-            JPanel placeholder = new JPanel();
-            placeholder.setOpaque(false);
-            gridPanel.add(placeholder);
-        }
-
         gridPanel.revalidate();
         gridPanel.repaint();
     }
@@ -135,9 +157,9 @@ public class ProductGalleryPanel extends JPanel {
         info.add(stockLbl);
         card.add(info, BorderLayout.SOUTH);
         
-        // 3. CLICKS (THE FIX: Timer Logic)
+        // 3. CLICKS (Timer Logic for Single vs Double Click)
         MouseAdapter listener = new MouseAdapter() {
-            private Timer clickTimer; // To distinguish single vs double click
+            private Timer clickTimer;
 
             public void mouseClicked(MouseEvent e) {
                 if (!Session.isAdmin()) return; 
@@ -151,13 +173,13 @@ public class ProductGalleryPanel extends JPanel {
                     }
                 } else if (SwingUtilities.isLeftMouseButton(e)) {
                     if (e.getClickCount() == 2) {
-                        // DOUBLE CLICK: Stop timer and show Full Edit
+                        // DOUBLE CLICK: Full Edit
                         if (clickTimer != null && clickTimer.isRunning()) {
                             clickTimer.stop();
                         }
                         showFullEditDialog(p);
                     } else if (e.getClickCount() == 1) {
-                        // SINGLE CLICK: Start timer, wait 300ms
+                        // SINGLE CLICK: Quick Edit
                         clickTimer = new Timer(300, evt -> {
                             showQuickEditDialog(p);
                         });
@@ -256,7 +278,6 @@ public class ProductGalleryPanel extends JPanel {
                 double w = Double.parseDouble(wF.getText());
                 double weight = Double.parseDouble(weightF.getText());
                 
-                // Re-add to update image
                 Database.deleteProduct(p.getObjectId("_id"));
                 Database.addProduct(nameF.getText(), catBox.getSelectedItem().toString(), 
                                     price, qty, h, w, weight, newImageCode[0]);
