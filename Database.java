@@ -153,4 +153,96 @@ public class Database {
             return false;
         }
     }
+    
+    // --- SUPPLIER METHODS (Updated with Category) ---
+    
+    public static boolean addSupplier(String name, String email, String phone, String address, String category) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return false;
+        
+        Document doc = new Document("name", name)
+                .append("email", email)
+                .append("phone", phone)
+                .append("address", address)
+                .append("category", category); // Now includes category
+        
+        try {
+            db.getCollection("suppliers").insertOne(doc);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static List<Document> getSuppliers() {
+        MongoDatabase db = getDatabase();
+        if (db == null) return new ArrayList<>();
+        return db.getCollection("suppliers").find().into(new ArrayList<>());
+    }
+
+    public static boolean deleteSupplier(ObjectId id) {
+        try {
+            getDatabase().getCollection("suppliers").deleteOne(eq("_id", id));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // --- PURCHASE ORDER METHODS ---
+
+    public static boolean savePurchaseOrder(String supplierName, String supplierEmail, List<Document> items, double totalEstimate) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return false;
+
+        Document order = new Document("supplier", supplierName)
+                .append("email", supplierEmail)
+                .append("date", new java.util.Date())
+                .append("items", items) // Nested list of what we bought
+                .append("totalEstimate", totalEstimate)
+                .append("status", "Sent");
+
+        try {
+            db.getCollection("purchase_orders").insertOne(order);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<Document> getPurchaseOrders() {
+        MongoDatabase db = getDatabase();
+        if (db == null) return new ArrayList<>();
+        // Sort by date descending (newest first)
+        return db.getCollection("purchase_orders").find().sort(new Document("date", -1)).into(new ArrayList<>());
+    }
+    // --- POS / SALES METHODS ---
+
+    public static boolean saveSale(List<Document> items, double totalAmount, double cashReceived, double change) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return false;
+
+        Document sale = new Document("date", new java.util.Date())
+                .append("items", items) // List of what was sold
+                .append("total", totalAmount)
+                .append("cash", cashReceived)
+                .append("change", change)
+                .append("paymentMethod", "Cash"); // Default to Cash for now
+
+        try {
+            db.getCollection("sales").insertOne(sale);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<Document> getSalesHistory() {
+        MongoDatabase db = getDatabase();
+        if (db == null) return new ArrayList<>();
+        // Get newest first
+        return db.getCollection("sales").find().sort(new Document("date", -1)).into(new ArrayList<>());
+    }
 }
