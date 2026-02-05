@@ -61,8 +61,8 @@ public class DashboardPanel extends JPanel {
 
         // B. Placeholders for other sections
         contentPanel.add(createPlaceholder("Dashboard Analytics"), "DASHBOARD");
-        contentPanel.add(createPlaceholder("Product Inventory"), "PRODUCTS");
-        contentPanel.add(createPlaceholder("Incoming Items"), "INCOMING");
+        contentPanel.add(new ProductGalleryPanel(), "PRODUCTS");
+        contentPanel.add(new AddProductPanel(), "INCOMING");
         contentPanel.add(createPlaceholder("Outgoing Items"), "OUTGOING");
 
         add(sidebar, BorderLayout.WEST);
