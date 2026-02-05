@@ -32,7 +32,6 @@ public class EmployeeReportPanel extends JPanel {
         left.setBorder(BorderFactory.createTitledBorder("Staff Performance Metrics"));
         left.setBackground(Theme.COLOR_CREAM);
 
-        // --- UPDATED COLUMNS HERE ---
         employeeModel = new DefaultTableModel(new String[]{"Username", "Role", "Incoming Processed", "Outgoing Processed"}, 0) {
             public boolean isCellEditable(int row, int col) { return false; }
         };
@@ -42,6 +41,14 @@ public class EmployeeReportPanel extends JPanel {
         employeeTable.getSelectionModel().addListSelectionListener(e -> loadComments());
 
         left.add(new JScrollPane(employeeTable), BorderLayout.CENTER);
+
+        // --- NEW REFRESH BUTTON ---
+        JButton refreshBtn = new JButton("REFRESH DATA");
+        refreshBtn.setBackground(Theme.COLOR_GREEN);
+        refreshBtn.setForeground(Color.WHITE);
+        refreshBtn.addActionListener(e -> loadData()); // Reloads the table
+        left.add(refreshBtn, BorderLayout.SOUTH);
+        // --------------------------
 
         // 2. RIGHT: Comments
         JPanel right = new JPanel(new BorderLayout(0, 10));
@@ -80,16 +87,14 @@ public class EmployeeReportPanel extends JPanel {
     }
 
     private void loadData() {
-        employeeModel.setRowCount(0);
+        employeeModel.setRowCount(0); // Clear old data
         List<Document> users = Database.getAllUsers();
 
         for (Document u : users) {
             String username = u.getString("username");
             
-            // --- UPDATED LOGIC HERE ---
-            // "Incoming" = Items added via AddProductPanel
+            // Fetch fresh counts from database
             int incomingCount = Database.getActionCount(username, "Incoming");
-            // "Outgoing" = Items exported via OutgoingPanel
             int outgoingCount = Database.getActionCount(username, "Export");
 
             employeeModel.addRow(new Object[]{

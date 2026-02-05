@@ -20,6 +20,7 @@ public class DashboardPanel extends JPanel {
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
 
         // --- CONTENT AREA SETUP ---
+        // 1. Add all potential panels here
         contentPanel.add(new ProductGalleryPanel(), "PRODUCTS");
         contentPanel.add(new AddProductPanel(), "INCOMING");
         contentPanel.add(new OutgoingPanel(), "OUTGOING");
@@ -28,13 +29,13 @@ public class DashboardPanel extends JPanel {
         contentPanel.add(new AnalyticsPanel(), "DASHBOARD");
         contentPanel.add(new SupplyOrderPanel(), "SUPPLY ORDERS");
         contentPanel.add(new EmployeeReportPanel(), "EMPLOYEE REPORT");
-        contentPanel.add(new VerifyUsersPanel(), "VERIFY USERS"); // Ensure this matches your file name
+        contentPanel.add(new VerifyUsersPanel(), "VERIFY USERS");
         contentPanel.add(new SettingsPanel(), "SETTINGS");
 
         add(sidebar, BorderLayout.WEST);
         add(contentPanel, BorderLayout.CENTER);
 
-        // --- SECURITY FIX: AUTO-REFRESH ON SHOW ---
+        // --- AUTO-REFRESH & RESET ON SHOW ---
         this.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentShown(java.awt.event.ComponentEvent e) {
@@ -62,12 +63,12 @@ public class DashboardPanel extends JPanel {
         boolean isAdmin = Session.isAdmin();
         System.out.println("DEBUG: Refreshing Sidebar. User: " + Session.currentUsername + " | Is Admin? " + isAdmin);
 
-        // Common Buttons (Everyone sees these)
+        // Common Buttons
         addMenuButton(sidebar, "PRODUCTS");
         addMenuButton(sidebar, "INCOMING");
         addMenuButton(sidebar, "OUTGOING");
 
-        // Admin Only Buttons (Security Check)
+        // Admin Only Buttons
         if (isAdmin) {
             JLabel adminLbl = new JLabel("ADMIN CONTROLS");
             adminLbl.setForeground(Color.YELLOW);
@@ -97,6 +98,12 @@ public class DashboardPanel extends JPanel {
         });
         sidebar.add(logoutBtn);
         sidebar.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        // --- THE FIX: ALWAYS RESET TO "PRODUCTS" ---
+        // This forces the view to jump back to the main gallery every time the dashboard loads.
+        // This prevents Staff from seeing the last screen the Admin was looking at.
+        contentLayout.show(contentPanel, "PRODUCTS");
+        // -------------------------------------------
 
         sidebar.revalidate();
         sidebar.repaint();
