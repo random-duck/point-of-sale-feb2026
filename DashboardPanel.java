@@ -59,7 +59,7 @@ public class DashboardPanel extends JPanel {
         contentPanel.add(verifyPanel, "VERIFY USERS");
 
         // B. Real Panels
-        contentPanel.add(createPlaceholder("Dashboard Analytics"), "DASHBOARD");
+        contentPanel.add(new AnalyticsPanel(), "DASHBOARD");
         
         // Link the real panels we created
         contentPanel.add(new ProductGalleryPanel(), "PRODUCTS");

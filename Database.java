@@ -2,14 +2,19 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
 import org.bson.Document;
 import org.bson.types.ObjectId;
+
 import java.util.ArrayList;
+import java.util.Date;   // <--- THIS WAS MISSING
 import java.util.List;
 import java.util.regex.Pattern;
 
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.gte;
+import static com.mongodb.client.model.Filters.lte;
 import static com.mongodb.client.model.Updates.set;
 
 public class Database {
@@ -58,8 +63,7 @@ public class Database {
         return true;
     }
     
-    // --- ADMIN USER METHODS (New!) ---
-    
+    // --- ADMIN USER METHODS ---
     public static List<Document> getAllUsers() {
         MongoDatabase db = getDatabase();
         if (db == null) return new ArrayList<>();
@@ -73,18 +77,16 @@ public class Database {
     }
 
     // --- PRODUCT METHODS ---
-    
     public static Document findProductByName(String name) {
         MongoDatabase db = getDatabase();
         if (db == null) return null;
-        // Symbol-safe regex search
         Pattern regex = Pattern.compile("^" + Pattern.quote(name.trim()) + "$", Pattern.CASE_INSENSITIVE);
         return db.getCollection(PRODUCTS_COLLECTION).find(eq("name", regex)).first();
     }
 
     public static boolean addProduct(String name, String category, double price, int quantity, 
                                      double height, double width, double weight, String imagePath) {
-        if (findProductByName(name) != null) return false; // Duplicate check
+        if (findProductByName(name) != null) return false; 
 
         MongoDatabase db = getDatabase();
         if (db == null) return false;
@@ -154,8 +156,7 @@ public class Database {
         }
     }
     
-    // --- SUPPLIER METHODS (Updated with Category) ---
-    
+    // --- SUPPLIER METHODS ---
     public static boolean addSupplier(String name, String email, String phone, String address, String category) {
         MongoDatabase db = getDatabase();
         if (db == null) return false;
@@ -164,7 +165,7 @@ public class Database {
                 .append("email", email)
                 .append("phone", phone)
                 .append("address", address)
-                .append("category", category); // Now includes category
+                .append("category", category);
         
         try {
             db.getCollection("suppliers").insertOne(doc);
@@ -190,15 +191,14 @@ public class Database {
     }
 
     // --- PURCHASE ORDER METHODS ---
-
     public static boolean savePurchaseOrder(String supplierName, String supplierEmail, List<Document> items, double totalEstimate) {
         MongoDatabase db = getDatabase();
         if (db == null) return false;
 
         Document order = new Document("supplier", supplierName)
                 .append("email", supplierEmail)
-                .append("date", new java.util.Date())
-                .append("items", items) // Nested list of what we bought
+                .append("date", new Date())
+                .append("items", items)
                 .append("totalEstimate", totalEstimate)
                 .append("status", "Sent");
 
@@ -214,21 +214,20 @@ public class Database {
     public static List<Document> getPurchaseOrders() {
         MongoDatabase db = getDatabase();
         if (db == null) return new ArrayList<>();
-        // Sort by date descending (newest first)
         return db.getCollection("purchase_orders").find().sort(new Document("date", -1)).into(new ArrayList<>());
     }
-    // --- POS / SALES METHODS ---
 
+    // --- POS & SALES METHODS ---
     public static boolean saveSale(List<Document> items, double totalAmount, double cashReceived, double change) {
         MongoDatabase db = getDatabase();
         if (db == null) return false;
 
-        Document sale = new Document("date", new java.util.Date())
-                .append("items", items) // List of what was sold
+        Document sale = new Document("date", new Date())
+                .append("items", items)
                 .append("total", totalAmount)
                 .append("cash", cashReceived)
                 .append("change", change)
-                .append("paymentMethod", "Cash"); // Default to Cash for now
+                .append("paymentMethod", "Cash");
 
         try {
             db.getCollection("sales").insertOne(sale);
@@ -242,7 +241,16 @@ public class Database {
     public static List<Document> getSalesHistory() {
         MongoDatabase db = getDatabase();
         if (db == null) return new ArrayList<>();
-        // Get newest first
         return db.getCollection("sales").find().sort(new Document("date", -1)).into(new ArrayList<>());
+    }
+
+    // --- ANALYTICS METHODS (This is what caused the error!) ---
+    public static List<Document> getSalesBetween(Date start, Date end) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return new ArrayList<>();
+        
+        return db.getCollection("sales")
+                 .find(and(gte("date", start), lte("date", end)))
+                 .into(new ArrayList<>());
     }
 }
