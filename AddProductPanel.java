@@ -6,47 +6,40 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class AddProductPanel extends JPanel {
 
-    // Store the selected image path here
     private String selectedImagePath = "";
     private JLabel imagePathLabel;
 
     public AddProductPanel() {
         setLayout(new BorderLayout());
         setBackground(Theme.COLOR_CREAM);
-        setBorder(new EmptyBorder(30, 50, 30, 50)); // Margin
+        setBorder(new EmptyBorder(30, 50, 30, 50)); 
 
-        // --- HEADER ---
         JLabel title = new JLabel("INCOMING ITEM ENTRY");
         title.setFont(Theme.FONT_TITLE);
         title.setForeground(Theme.COLOR_DARK);
         title.setHorizontalAlignment(SwingConstants.CENTER);
         add(title, BorderLayout.NORTH);
 
-        // --- FORM PANEL (GridBagLayout) ---
         JPanel formPanel = new JPanel(new GridBagLayout());
         formPanel.setBackground(Theme.COLOR_CREAM);
         
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10); // Spacing
+        gbc.insets = new Insets(10, 10, 10, 10); 
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.gridx = 0; gbc.gridy = 0;
 
-        // 1. Product Name
         addLabel(formPanel, "Product Name:", gbc);
         JTextField nameField = new JTextField(20);
         styleField(nameField);
         gbc.gridx = 1; formPanel.add(nameField, gbc);
 
-        // 2. Category (Updated to be Broader + N/A)
         gbc.gridx = 0; gbc.gridy++;
         addLabel(formPanel, "Category:", gbc);
-        // "Furniture" covers sofas/tables, "Utensils" covers kitchenware, "N/A" for others
         String[] cats = {"Furniture", "Utensils", "Appliances", "Electronics", "Decor", "N/A"};
         JComboBox<String> catBox = new JComboBox<>(cats);
         catBox.setBackground(Color.WHITE);
         gbc.gridx = 1; formPanel.add(catBox, gbc);
 
-        // 3. Price (PHP) & Quantity
         gbc.gridx = 0; gbc.gridy++;
         addLabel(formPanel, "Price (PHP):", gbc);
         JTextField priceField = new JTextField(10);
@@ -59,7 +52,6 @@ public class AddProductPanel extends JPanel {
         styleField(qtyField);
         gbc.gridx = 1; formPanel.add(qtyField, gbc);
 
-        // 4. Dimensions (Height, Width, Weight) - Now Required Numbers
         gbc.gridx = 0; gbc.gridy++;
         addLabel(formPanel, "Height (cm):", gbc);
         JTextField hField = new JTextField(); styleField(hField);
@@ -75,7 +67,6 @@ public class AddProductPanel extends JPanel {
         JTextField weightField = new JTextField(); styleField(weightField);
         gbc.gridx = 1; formPanel.add(weightField, gbc);
 
-        // 5. Image Selection
         gbc.gridx = 0; gbc.gridy++;
         addLabel(formPanel, "Product Image:", gbc);
         
@@ -92,7 +83,6 @@ public class AddProductPanel extends JPanel {
         
         gbc.gridx = 1; formPanel.add(imagePanel, gbc);
 
-        // --- IMAGE CHOOSER ACTION ---
         uploadBtn.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
             FileNameExtensionFilter filter = new FileNameExtensionFilter("Images (JPG, PNG)", "jpg", "png", "jpeg");
@@ -106,20 +96,16 @@ public class AddProductPanel extends JPanel {
             }
         });
 
-        // --- BUTTONS (Submit & Import) ---
-        
         JButton submitBtn = new JButton("ADD ITEM");
         styleButtonLarge(submitBtn);
 
-        // New Import Button
         JButton importBtn = new JButton("BULK IMPORT (CSV)");
         importBtn.setFont(Theme.FONT_TITLE);
-        importBtn.setBackground(Theme.COLOR_ACCENT); // Different color to distinguish
+        importBtn.setBackground(Theme.COLOR_ACCENT); 
         importBtn.setForeground(Color.WHITE);
         importBtn.setPreferredSize(new Dimension(250, 50));
         importBtn.setFocusPainted(false);
 
-        
         JScrollPane scrollPane = new JScrollPane(formPanel);
         scrollPane.setBorder(null);
         add(scrollPane, BorderLayout.CENTER);
@@ -127,10 +113,9 @@ public class AddProductPanel extends JPanel {
         JPanel bottomPanel = new JPanel();
         bottomPanel.setBackground(Theme.COLOR_CREAM);
         bottomPanel.add(submitBtn);
-        bottomPanel.add(importBtn); // Add the import button here
+        bottomPanel.add(importBtn); 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        // --- IMPORT LOGIC ---
         importBtn.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setDialogTitle("Select CSV File");
@@ -139,21 +124,16 @@ public class AddProductPanel extends JPanel {
             int option = fileChooser.showOpenDialog(this);
             if (option == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
-                // Call our helper class to process the CSV
                 CSVImporter.importCSV((JFrame) SwingUtilities.getWindowAncestor(this), file);
             }
         });
 
-        // --- SUBMIT LOGIC: VALIDATION & SAVE ---
         submitBtn.addActionListener(e -> {
-            
-            // 1. Check Text Fields (Name)
             if (nameField.getText().trim().isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Product Name is required!");
                 return;
             }
 
-            // 2. Validate Numbers (Price, Qty, Dimensions)
             double price, height, width, weight;
             int quantity;
 
@@ -168,27 +148,22 @@ public class AddProductPanel extends JPanel {
                       JOptionPane.showMessageDialog(this, "Values cannot be negative.");
                       return;
                 }
-
             } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, 
-                    "Invalid Input!\n\n" +
-                    "- Price, Height, Width, and Weight must be numbers (Decimals allowed).\n" +
-                    "- Quantity must be a whole number.\n" +
-                    "- No fields can be left empty.", 
-                    "Input Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Invalid Numbers.", "Input Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            // 3. Get other values
             String name = nameField.getText();
             String cat = catBox.getSelectedItem().toString();
 
-            // 4. Save to Database
             boolean success = Database.addProduct(name, cat, price, quantity, height, width, weight, selectedImagePath);
 
             if (success) {
+                // --- TRACK PERFORMANCE (Incoming) ---
+                Database.saveActionLog(Session.currentUsername, "Incoming", quantity);
+                // ------------------------------------
+
                 JOptionPane.showMessageDialog(this, "Item Added Successfully!");
-                // Clear form
                 nameField.setText("");
                 priceField.setText("");
                 qtyField.setText("");
@@ -203,7 +178,6 @@ public class AddProductPanel extends JPanel {
         });
     }
 
-    // --- STYLING HELPERS ---
     private void addLabel(JPanel p, String text, GridBagConstraints gbc) {
         JLabel l = new JLabel(text);
         l.setFont(Theme.FONT_BOLD);
@@ -214,7 +188,7 @@ public class AddProductPanel extends JPanel {
     private void styleField(JTextField f) {
         f.setFont(Theme.FONT_REGULAR);
         f.setBorder(BorderFactory.createLineBorder(Theme.COLOR_GREEN));
-        f.setPreferredSize(new Dimension(200, 25)); // Make input boxes uniform size
+        f.setPreferredSize(new Dimension(200, 25)); 
     }
 
     private void styleButtonSmall(JButton b) {

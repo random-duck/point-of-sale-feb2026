@@ -203,7 +203,8 @@ public class SupplyOrderPanel extends JPanel {
             return;
         }
 
-        Database.savePurchaseOrder(supplier.name, supplier.email, orderItems, 0.0);
+        // Updated to include Session.currentUsername
+        Database.savePurchaseOrder(supplier.name, supplier.email, orderItems, 0.0, Session.currentUsername);
 
         try {
             String filename = "PO_" + supplier.name.replaceAll(" ", "_") + "_" + System.currentTimeMillis() + ".txt";
@@ -260,7 +261,7 @@ public class SupplyOrderPanel extends JPanel {
             }
         });
 
-        // Right click delete logic (same as before)
+        // Right click delete logic
         supplierTable.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
@@ -322,8 +323,8 @@ public class SupplyOrderPanel extends JPanel {
         
         List<Document> suppliers = Database.getSuppliers();
         for (Document d : suppliers) {
-            String cat = d.getString("category"); // Retrieve Category
-            if(cat == null) cat = "General";      // Default if missing
+            String cat = d.getString("category");
+            if(cat == null) cat = "General";
             
             supplierModel.addRow(new Object[]{ 
                 d.getObjectId("_id"), 
@@ -356,6 +357,6 @@ public class SupplyOrderPanel extends JPanel {
     class SupplierItem {
         String name, email, category;
         public SupplierItem(String n, String e, String c) { name = n; email = e; category = c; }
-        public String toString() { return name + " (" + category + ")"; } // Shows "IKEA (Furniture)" in dropdown
+        public String toString() { return name + " (" + category + ")"; } 
     }
 }
