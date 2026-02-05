@@ -39,7 +39,7 @@ public class DashboardPanel extends JPanel {
         addMenuButton(sidebar, "INCOMING");
         addMenuButton(sidebar, "OUTGOING");
         addMenuButton(sidebar, "SUPPLY ORDERS");
-        addMenuButton(sidebar, "POS TERMINAL");
+        addMenuButton(sidebar, "SETTINGS");
         
         // Logout Button at bottom
         sidebar.add(Box.createVerticalGlue()); 
@@ -66,7 +66,7 @@ public class DashboardPanel extends JPanel {
         contentPanel.add(new AddProductPanel(), "INCOMING");
         contentPanel.add(new OutgoingPanel(), "OUTGOING");
         contentPanel.add(new SupplyOrderPanel(), "SUPPLY ORDERS");
-        contentPanel.add(new POSTerminalPanel(), "POS TERMINAL");
+        contentPanel.add(new SettingsPanel(), "SETTINGS");
 
         add(sidebar, BorderLayout.WEST);
         add(contentPanel, BorderLayout.CENTER);

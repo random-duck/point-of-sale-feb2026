@@ -1,247 +1,175 @@
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.bson.Document;
 
 public class AnalyticsPanel extends JPanel {
 
-    // Controls
     private JComboBox<String> rangeBox;
-    private JLabel totalSalesCard;
-    private JLabel totalTransCard;
     
     // Tables
     private DefaultTableModel lowStockModel;
-    private DefaultTableModel topProdModel;
-    
-    // Chart
-    private BarChartPanel chartPanel;
+    private DefaultTableModel bestSellerModel;
+    private DefaultTableModel worstSellerModel;
 
     public AnalyticsPanel() {
         setLayout(new BorderLayout(10, 10));
         setBackground(Theme.COLOR_CREAM);
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // --- 1. TOP BAR (Filter) ---
-        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        topBar.setBackground(Theme.COLOR_CREAM);
+        // --- 1. HEADER (Filter) ---
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(Theme.COLOR_CREAM);
         
-        JLabel lbl = new JLabel("Time Period: ");
-        lbl.setFont(Theme.FONT_BOLD);
+        JLabel title = new JLabel("Inventory Intelligence");
+        title.setFont(Theme.FONT_TITLE);
+        title.setForeground(Theme.COLOR_DARK);
         
-        String[] ranges = {"Today", "Last 7 Days", "This Month", "This Year"};
+        JPanel filterPanel = new JPanel();
+        filterPanel.setBackground(Theme.COLOR_CREAM);
+        filterPanel.add(new JLabel("Analyze: "));
+        String[] ranges = {"All Time", "Today", "Last 7 Days", "This Month"};
         rangeBox = new JComboBox<>(ranges);
         rangeBox.addActionListener(e -> refreshData());
+        filterPanel.add(rangeBox);
 
-        topBar.add(lbl);
-        topBar.add(rangeBox);
-        add(topBar, BorderLayout.NORTH);
+        header.add(title, BorderLayout.WEST);
+        header.add(filterPanel, BorderLayout.EAST);
+        add(header, BorderLayout.NORTH);
 
-        // --- 2. MAIN CONTENT (Split Top/Bottom) ---
-        JPanel centerPanel = new JPanel(new GridLayout(2, 1, 10, 10)); // 2 Rows
-        centerPanel.setBackground(Theme.COLOR_CREAM);
+        // --- 2. MAIN CONTENT (3 Columns) ---
+        JPanel grid = new JPanel(new GridLayout(1, 3, 20, 0)); // 3 Columns
+        grid.setBackground(Theme.COLOR_CREAM);
 
-        // ROW A: CARDS + CHART
-        JPanel rowA = new JPanel(new BorderLayout(10, 0));
-        rowA.setBackground(Theme.COLOR_CREAM);
+        // Table 1: Low Stock (Critical)
+        lowStockModel = new DefaultTableModel(new String[]{"⚠️ Low Stock Item", "Qty"}, 0);
+        grid.add(createTablePanel("Critical Stock Level (<= 5)", lowStockModel, new Color(255, 235, 235)));
 
-        // Left: Big Number Cards
-        JPanel cardsPanel = new JPanel(new GridLayout(2, 1, 0, 10));
-        cardsPanel.setPreferredSize(new Dimension(250, 0));
-        cardsPanel.setBackground(Theme.COLOR_CREAM);
-        
-        totalSalesCard = createCard("Total Sales", "PHP 0.00", Color.decode("#4CAF50")); // Green
-        totalTransCard = createCard("Transactions", "0", Color.decode("#2196F3")); // Blue
-        
-        cardsPanel.add(totalSalesCard);
-        cardsPanel.add(totalTransCard);
-        
-        // Right: Bar Chart
-        chartPanel = new BarChartPanel();
-        
-        rowA.add(cardsPanel, BorderLayout.WEST);
-        rowA.add(chartPanel, BorderLayout.CENTER);
+        // Table 2: Best Sellers
+        bestSellerModel = new DefaultTableModel(new String[]{"🔥 Best Moving", "Sold"}, 0);
+        grid.add(createTablePanel("Highest Demand Items", bestSellerModel, new Color(235, 255, 235)));
 
-        // ROW B: TABLES (Low Stock & Top Products)
-        JPanel rowB = new JPanel(new GridLayout(1, 2, 10, 0));
-        rowB.setBackground(Theme.COLOR_CREAM);
+        // Table 3: Worst Sellers (Dead Stock)
+        worstSellerModel = new DefaultTableModel(new String[]{"❄️ Slow / Dead Stock", "Sold"}, 0);
+        grid.add(createTablePanel("Lowest Demand Items", worstSellerModel, new Color(235, 245, 255)));
 
-        // Table 1: Low Stock
-        lowStockModel = new DefaultTableModel(new String[]{"Low Stock Item", "Qty"}, 0);
-        JTable lowStockTable = new JTable(lowStockModel);
-        lowStockTable.setEnabled(false); // Read only
-        JPanel lowStockPanel = createTablePanel("⚠️ Low Stock Alerts", lowStockTable);
-
-        // Table 2: Top Products
-        topProdModel = new DefaultTableModel(new String[]{"Top Product", "Sold"}, 0);
-        JTable topProdTable = new JTable(topProdModel);
-        topProdTable.setEnabled(false);
-        JPanel topProdPanel = createTablePanel("🏆 Best Sellers", topProdTable);
-
-        rowB.add(lowStockPanel);
-        rowB.add(topProdPanel);
-
-        centerPanel.add(rowA);
-        centerPanel.add(rowB);
-
-        add(centerPanel, BorderLayout.CENTER);
+        add(grid, BorderLayout.CENTER);
 
         // Initial Load
         refreshData();
     }
 
-    // --- LOGIC: REFRESH ALL DATA ---
+    // --- LOGIC ---
     private void refreshData() {
-        String range = (String) rangeBox.getSelectedItem();
-        Date start = new Date();
-        Date end = new Date();
-        
-        // 1. Calculate Date Range
-        Calendar cal = Calendar.getInstance();
-        cal.set(Calendar.HOUR_OF_DAY, 0); 
-        cal.set(Calendar.MINUTE, 0); 
-        cal.set(Calendar.SECOND, 0); // Start of today
+        // 1. Clear Tables
+        lowStockModel.setRowCount(0);
+        bestSellerModel.setRowCount(0);
+        worstSellerModel.setRowCount(0);
 
-        if (range.equals("Today")) {
-            start = cal.getTime();
-        } else if (range.equals("Last 7 Days")) {
-            cal.add(Calendar.DAY_OF_YEAR, -7);
-            start = cal.getTime();
-        } else if (range.equals("This Month")) {
-            cal.set(Calendar.DAY_OF_MONTH, 1);
-            start = cal.getTime();
-        } else if (range.equals("This Year")) {
-            cal.set(Calendar.DAY_OF_YEAR, 1);
-            start = cal.getTime();
-        }
-        
-        // 2. Fetch Sales
-        List<Document> sales = Database.getSalesBetween(start, end);
-        
-        // 3. Update Cards
-        double totalSales = 0;
-        int totalTrans = sales.size();
-        Map<String, Integer> productCounts = new HashMap<>();
+        // 2. Load Sales History
+        // If you deleted getSalesBetween, we use getSalesHistory and filter manually
+        List<Document> allSales = Database.getSalesHistory(); 
+        List<Document> filteredSales = filterSalesByDate(allSales, (String) rangeBox.getSelectedItem());
 
-        for (Document sale : sales) {
-            totalSales += sale.getDouble("total");
-            
-            // Count products for "Best Sellers"
+        // 3. Calculate Item Counts
+        Map<String, Integer> productSalesCounts = new HashMap<>();
+        
+        // Fill map with sold items
+        for (Document sale : filteredSales) {
             List<Document> items = (List<Document>) sale.get("items");
-            for (Document item : items) {
-                String name = item.getString("name");
-                int qty = item.getInteger("qty");
-                productCounts.put(name, productCounts.getOrDefault(name, 0) + qty);
+            if (items != null) {
+                for (Document item : items) {
+                    String name = item.getString("name");
+                    int qty = item.getInteger("qty");
+                    productSalesCounts.put(name, productSalesCounts.getOrDefault(name, 0) + qty);
+                }
             }
         }
-        
-        updateCardValue(totalSalesCard, "PHP " + String.format("%,.2f", totalSales));
-        updateCardValue(totalTransCard, String.valueOf(totalTrans));
 
-        // 4. Update Chart
-        chartPanel.updateData(sales, range);
+        // 4. Get Current Inventory for Low Stock & Worst Sellers
+        List<Document> inventory = Database.getProducts("All");
 
-        // 5. Update Top Products Table
-        topProdModel.setRowCount(0);
-        productCounts.entrySet().stream()
-            .sorted((k1, k2) -> -k1.getValue().compareTo(k2.getValue())) // Sort Descending
-            .limit(10) // Top 10
-            .forEach(e -> topProdModel.addRow(new Object[]{e.getKey(), e.getValue()}));
-
-        // 6. Update Low Stock (Separate DB Call)
-        lowStockModel.setRowCount(0);
-        List<Document> allProducts = Database.getProducts("All");
-        for (Document p : allProducts) {
+        // --- POPULATE LOW STOCK ---
+        for (Document p : inventory) {
             if (p.getInteger("quantity") <= 5) {
                 lowStockModel.addRow(new Object[]{p.getString("name"), p.getInteger("quantity")});
             }
         }
+
+        // --- POPULATE BEST SELLERS (Sort Map Descending) ---
+        productSalesCounts.entrySet().stream()
+            .sorted((k1, k2) -> -k1.getValue().compareTo(k2.getValue())) // High to Low
+            .limit(20)
+            .forEach(e -> bestSellerModel.addRow(new Object[]{e.getKey(), e.getValue()}));
+
+        // --- POPULATE WORST SELLERS (Items with 0 or low sales) ---
+        List<Object[]> worstList = new ArrayList<>();
+        
+        for (Document p : inventory) {
+            String name = p.getString("name");
+            int soldCount = productSalesCounts.getOrDefault(name, 0);
+            worstList.add(new Object[]{name, soldCount});
+        }
+        
+        // Sort Low to High
+        worstList.sort(Comparator.comparingInt(o -> (int) o[1]));
+        
+        // Add top 20 worst to table
+        for (int i = 0; i < Math.min(worstList.size(), 20); i++) {
+            worstSellerModel.addRow(worstList.get(i));
+        }
+    }
+
+    // --- HELPER: Filter Dates Manually ---
+    private List<Document> filterSalesByDate(List<Document> sales, String range) {
+        if (range.equals("All Time")) return sales;
+
+        List<Document> filtered = new ArrayList<>();
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0);
+        Date startOfToday = cal.getTime();
+
+        if (range.equals("Today")) {
+            // Start is today
+        } else if (range.equals("Last 7 Days")) {
+            cal.add(Calendar.DAY_OF_YEAR, -7);
+        } else if (range.equals("This Month")) {
+            cal.set(Calendar.DAY_OF_MONTH, 1);
+        }
+        Date cutOff = cal.getTime();
+
+        for (Document d : sales) {
+            Date saleDate = d.getDate("date");
+            if (saleDate != null && !saleDate.before(cutOff)) {
+                filtered.add(d);
+            }
+        }
+        return filtered;
     }
 
     // --- UI HELPERS ---
-    
-    private JLabel createCard(String title, String value, Color color) {
-        JLabel card = new JLabel("<html><center>" + title + "<br><font size='6'>" + value + "</font></center></html>", SwingConstants.CENTER);
-        card.setOpaque(true);
-        card.setBackground(color);
-        card.setForeground(Color.WHITE);
-        card.setFont(new Font("SansSerif", Font.BOLD, 14));
-        card.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
-        return card;
-    }
-
-    private void updateCardValue(JLabel card, String value) {
-        String title = card.getText().split("<br>")[0].replace("<html><center>", "");
-        card.setText("<html><center>" + title + "<br><font size='6'>" + value + "</font></center></html>");
-    }
-
-    private JPanel createTablePanel(String title, JTable table) {
+    private JPanel createTablePanel(String title, DefaultTableModel model, Color headerColor) {
         JPanel p = new JPanel(new BorderLayout());
-        p.setBorder(BorderFactory.createTitledBorder(title));
+        p.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
         p.setBackground(Theme.COLOR_CREAM);
-        p.add(new JScrollPane(table));
+
+        JLabel lbl = new JLabel(title, SwingConstants.CENTER);
+        lbl.setFont(Theme.FONT_BOLD);
+        lbl.setOpaque(true);
+        lbl.setBackground(headerColor);
+        lbl.setBorder(BorderFactory.createLineBorder(Theme.COLOR_GREEN, 1));
+        lbl.setPreferredSize(new Dimension(0, 30));
+
+        JTable table = new JTable(model);
+        table.setEnabled(false);
+        table.setFillsViewportHeight(true);
+        table.setRowHeight(25);
+        
+        p.add(lbl, BorderLayout.NORTH);
+        p.add(new JScrollPane(table), BorderLayout.CENTER);
         return p;
     }
-
-    // --- INNER CLASS: BAR CHART ---
-    private class BarChartPanel extends JPanel {
-        private Map<String, Double> data = new LinkedHashMap<>();
-
-        public BarChartPanel() {
-            setBackground(Color.WHITE);
-            setBorder(BorderFactory.createLineBorder(Color.GRAY));
-        }
-
-        public void updateData(List<Document> sales, String range) {
-            data.clear();
-            SimpleDateFormat sdf;
-            
-            // Format keys based on range (e.g., "Jan 1", "Jan 2")
-            if (range.contains("Year")) sdf = new SimpleDateFormat("MMM"); // Jan, Feb
-            else sdf = new SimpleDateFormat("dd"); // 01, 02 (Day of month)
-
-            for (Document sale : sales) {
-                String key = sdf.format(sale.getDate("date"));
-                double amount = sale.getDouble("total");
-                data.put(key, data.getOrDefault(key, 0.0) + amount);
-            }
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            if (data.isEmpty()) {
-                g.drawString("No Sales Data for this Period", getWidth()/2 - 50, getHeight()/2);
-                return;
-            }
-
-            Graphics2D g2 = (Graphics2D) g;
-            int width = getWidth();
-            int height = getHeight();
-            int barWidth = (width / data.size()) - 10;
-            double maxVal = data.values().stream().max(Double::compare).orElse(1.0);
-
-            int x = 10;
-            for (Map.Entry<String, Double> entry : data.entrySet()) {
-                int barHeight = (int) ((entry.getValue() / maxVal) * (height - 40));
-                
-                // Draw Bar
-                g2.setColor(Theme.COLOR_GREEN);
-                g2.fillRect(x, height - barHeight - 20, barWidth, barHeight);
-                
-                // Draw Text (Value)
-                g2.setColor(Color.BLACK);
-                //g2.drawString(String.valueOf(entry.getValue().intValue()), x, height - barHeight - 25);
-                
-                // Draw Label (Date)
-                g2.drawString(entry.getKey(), x + (barWidth/4), height - 5);
-                
-                x += barWidth + 10;
-            }
-        }
-    }
-}
+}   
