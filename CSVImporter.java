@@ -8,19 +8,16 @@ import org.bson.Document;
 
 public class CSVImporter {
 
-    // Helper class to store parsed data temporarily
     public static class ProductData {
         String name, category;
         double price, h, w, weight;
         int quantity;
     }
 
-    // Helper class for conflicts
     public static class ConflictItem {
         ProductData newData;
         Document existingDoc;
         String resolution = "Skip"; 
-        
         public ConflictItem(ProductData d, Document e) { newData = d; existingDoc = e; }
     }
 
@@ -37,27 +34,36 @@ public class CSVImporter {
             
             while ((line = br.readLine()) != null) {
                 rowNum++;
-                String[] values = line.split(",");
+                // Skip empty lines
+                if (line.trim().isEmpty()) continue;
+
+                // --- THE FIX: CSV REGEX SPLIT ---
+                // This complex regex splits by comma ONLY if it's not inside quotes
+                String[] values = line.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);
                 
-                // Skip empty lines or header
+                // Clean up quotes around values (e.g. "Sofa" -> Sofa)
+                for(int i=0; i<values.length; i++) {
+                    values[i] = values[i].trim().replace("\"", "");
+                }
+
+                // Skip Header
                 if (values.length < 4 || values[0].equalsIgnoreCase("Name")) continue;
 
                 try {
                     ProductData p = new ProductData();
-                    p.name = values[0].trim();
-                    p.category = values[1].trim();
+                    p.name = values[0]; // Name
+                    p.category = values[1]; // Category
                     
-                    // --- THE FIX: SMART PARSING ---
-                    // We now use 'cleanDouble' and 'cleanInt' instead of standard parsing
-                    p.price = cleanDouble(values[2]);
+                    // Smart parse numbers (removes $ and ,)
+                    p.price = cleanDouble(values[2]); 
                     p.quantity = cleanInt(values[3]);
                     
-                    // Dimensions (handle missing columns safely)
+                    // Dimensions (Optional)
                     p.h = (values.length > 4) ? cleanDouble(values[4]) : 0;
                     p.w = (values.length > 5) ? cleanDouble(values[5]) : 0;
                     p.weight = (values.length > 6) ? cleanDouble(values[6]) : 0;
 
-                    // CHECK FOR DUPLICATES
+                    // Check Duplicates
                     Document existing = Database.findProductByName(p.name);
                     if (existing != null) {
                         conflicts.add(new ConflictItem(p, existing));
@@ -67,8 +73,7 @@ public class CSVImporter {
 
                 } catch (Exception ex) {
                     errorCount++;
-                    // More detailed error message for debugging
-                    errorReport.append("Row ").append(rowNum).append(": Check '").append(values[0]).append("' values. (Err: ").append(ex.getMessage()).append(")\n");
+                    errorReport.append("Row ").append(rowNum).append(": Failed to read column. (Check if Price/Qty has letters)\n");
                 }
             }
 
@@ -86,24 +91,11 @@ public class CSVImporter {
                     if (item.resolution.equals("Skip")) continue;
                     
                     if (item.resolution.equals("Replace")) {
-                        Database.updateProduct(
-                            item.existingDoc.getObjectId("_id"), 
-                            item.newData.name, item.newData.category, 
-                            item.newData.price, item.newData.quantity, 
-                            item.newData.h, item.newData.w, item.newData.weight
-                        );
+                        Database.updateProduct(item.existingDoc.getObjectId("_id"), item.newData.name, item.newData.category, item.newData.price, item.newData.quantity, item.newData.h, item.newData.w, item.newData.weight);
                         successCount++;
-                    } 
-                    else if (item.resolution.equals("Update Stock (Add)")) {
+                    } else if (item.resolution.equals("Update Stock (Add)")) {
                         int newTotal = item.existingDoc.getInteger("quantity") + item.newData.quantity;
-                        Database.updateProduct(
-                            item.existingDoc.getObjectId("_id"), 
-                            item.existingDoc.getString("name"), item.existingDoc.getString("category"), 
-                            item.existingDoc.getDouble("price"), newTotal, 
-                            item.existingDoc.get("dimensions", Document.class).getDouble("height"),
-                            item.existingDoc.get("dimensions", Document.class).getDouble("width"),
-                            item.existingDoc.get("dimensions", Document.class).getDouble("weight")
-                        );
+                        Database.updateProduct(item.existingDoc.getObjectId("_id"), item.existingDoc.getString("name"), item.existingDoc.getString("category"), item.existingDoc.getDouble("price"), newTotal, item.existingDoc.get("dimensions", Document.class).getDouble("height"), item.existingDoc.get("dimensions", Document.class).getDouble("width"), item.existingDoc.get("dimensions", Document.class).getDouble("weight"));
                         successCount++;
                     }
                 }
@@ -115,38 +107,24 @@ public class CSVImporter {
                 successCount++;
             }
 
-            // --- 3. FINAL REPORT ---
-            String msg = "Import Complete!\nSuccessfully Imported/Updated: " + successCount;
-            if (errorCount > 0) {
-                msg += "\n\nSkipped " + errorCount + " rows due to errors:\n" + errorReport.toString();
-            }
+            // --- 3. REPORT ---
+            String msg = "Import Complete!\nProcessed: " + successCount;
+            if (errorCount > 0) msg += "\nSkipped " + errorCount + " rows (See error log).";
             JOptionPane.showMessageDialog(parent, msg);
 
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(parent, "Error reading file: " + e.getMessage());
+            JOptionPane.showMessageDialog(parent, "File Error: " + e.getMessage());
         }
     }
 
-    // --- NEW HELPER METHODS ---
-
-    /**
-     * Cleans a string (removes $, PHP, commas) and converts to double.
-     */
-    private static double cleanDouble(String input) throws NumberFormatException {
+    private static double cleanDouble(String input) {
         if (input == null || input.trim().isEmpty()) return 0.0;
-        // Remove 'PHP', '$', spaces, and commas
-        String clean = input.replaceAll("[^0-9.]", ""); 
-        return Double.parseDouble(clean);
+        return Double.parseDouble(input.replaceAll("[^0-9.]", ""));
     }
 
-    /**
-     * Cleans a string and converts to integer.
-     */
-    private static int cleanInt(String input) throws NumberFormatException {
+    private static int cleanInt(String input) {
         if (input == null || input.trim().isEmpty()) return 0;
-        // Remove everything that isn't a digit
-        String clean = input.replaceAll("[^0-9]", "");
-        return Integer.parseInt(clean);
+        return Integer.parseInt(input.replaceAll("[^0-9]", ""));
     }
 }

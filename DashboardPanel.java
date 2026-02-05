@@ -3,12 +3,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
+import java.util.List;
 import org.bson.Document;
 import org.bson.types.ObjectId;
-import static com.mongodb.client.model.Filters.eq;
-import static com.mongodb.client.model.Updates.set;
 
 public class DashboardPanel extends JPanel {
 
@@ -43,7 +40,7 @@ public class DashboardPanel extends JPanel {
         addMenuButton(sidebar, "OUTGOING");
         
         // Logout Button at bottom
-        sidebar.add(Box.createVerticalGlue()); // Pushes logout to bottom
+        sidebar.add(Box.createVerticalGlue()); 
         JButton logoutBtn = new JButton("LOGOUT");
         logoutBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         logoutBtn.setBackground(Theme.COLOR_DARK);
@@ -59,8 +56,10 @@ public class DashboardPanel extends JPanel {
         JPanel verifyPanel = createVerifyPanel();
         contentPanel.add(verifyPanel, "VERIFY USERS");
 
-        // B. Placeholders for other sections
+        // B. Real Panels
         contentPanel.add(createPlaceholder("Dashboard Analytics"), "DASHBOARD");
+        
+        // Link the real panels we created
         contentPanel.add(new ProductGalleryPanel(), "PRODUCTS");
         contentPanel.add(new AddProductPanel(), "INCOMING");
         contentPanel.add(new OutgoingPanel(), "OUTGOING");
@@ -109,6 +108,10 @@ public class DashboardPanel extends JPanel {
         table.setRowHeight(30);
         table.setFont(Theme.FONT_REGULAR);
         
+        // Hide ID Column
+        table.getColumnModel().getColumn(0).setMinWidth(0);
+        table.getColumnModel().getColumn(0).setMaxWidth(0);
+        
         // Scroll Pane
         JScrollPane scroll = new JScrollPane(table);
         p.add(scroll, BorderLayout.CENTER);
@@ -129,11 +132,11 @@ public class DashboardPanel extends JPanel {
         // 1. Refresh Table
         refreshBtn.addActionListener(e -> {
             model.setRowCount(0); // Clear table
-            MongoDatabase db = Database.getDatabase();
-            if (db == null) return;
             
-            MongoCollection<Document> users = db.getCollection("users");
-            for (Document doc : users.find()) {
+            // USE THE NEW DATABASE METHOD
+            List<Document> users = Database.getAllUsers();
+            
+            for (Document doc : users) {
                 model.addRow(new Object[]{
                     doc.getObjectId("_id"),
                     doc.getString("username"),
@@ -151,7 +154,7 @@ public class DashboardPanel extends JPanel {
                 return;
             }
 
-            // Get ID and Username from table
+            // Get ID from table
             ObjectId userId = (ObjectId) table.getValueAt(row, 0);
             String currentStatus = (String) table.getValueAt(row, 3);
 
@@ -160,9 +163,8 @@ public class DashboardPanel extends JPanel {
                 return;
             }
 
-            // Update MongoDB
-            MongoCollection<Document> users = Database.getDatabase().getCollection("users");
-            users.updateOne(eq("_id", userId), set("status", "Approved"));
+            // USE THE NEW DATABASE METHOD
+            Database.approveUser(userId);
             
             JOptionPane.showMessageDialog(this, "User Approved!");
             refreshBtn.doClick(); // Auto-refresh table

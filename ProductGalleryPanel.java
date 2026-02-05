@@ -80,6 +80,15 @@ public class ProductGalleryPanel extends JPanel {
 
         // Load initial data
         loadData();
+
+        // --- THE FIX: AUTO-REFRESH LISTENER ---
+        // Reloads data every time this tab is clicked/shown
+        this.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentShown(java.awt.event.ComponentEvent e) {
+                loadData();
+            }
+        });
     }
 
     // --- DATA LOADING LOGIC ---

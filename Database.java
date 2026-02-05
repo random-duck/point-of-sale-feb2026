@@ -3,19 +3,24 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
+import org.bson.types.ObjectId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Updates.set;
 
 public class Database {
 
     // --- CONFIGURATION ---
-    // 🔴 IMPORTANT: Ensure this matches your actual MongoDB Atlas connection string
     private static final String URI = "mongodb+srv://admin:1234567890987654321@cluster0.hadhdy5.mongodb.net/?retryWrites=true&w=majority";
     
     private static final String DB_NAME = "inventory_db";
     private static final String USERS_COLLECTION = "users";
+    private static final String PRODUCTS_COLLECTION = "products";
 
-    // We keep one static client to reuse connections (Much faster!)
     private static MongoClient mongoClient;
 
     // --- CONNECTION HANDLING ---
@@ -32,78 +37,61 @@ public class Database {
         return mongoClient.getDatabase(DB_NAME);
     }
 
-    // --- AUTHENTICATION METHODS ---
-
-    /**
-     * Checks if a user exists with the given credentials.
-     * @return The User Document if found (contains role, status, etc.), or null if failed.
-     */
+    // --- AUTH METHODS ---
     public static Document login(String username, String password) {
         MongoDatabase db = getDatabase();
         if (db == null) return null;
-
-        MongoCollection<Document> users = db.getCollection(USERS_COLLECTION);
-
-        // Find a user where 'username' matches AND 'password' matches
-        Document user = users.find(and(
-            eq("username", username),
-            eq("password", password)
-        )).first();
-
-        return user;
+        return db.getCollection(USERS_COLLECTION).find(and(eq("username", username), eq("password", password))).first();
     }
 
-    /**
-     * Registers a new user.
-     * @return true if successful, false if username already exists.
-     */
     public static boolean registerUser(String username, String password, String role) {
         MongoDatabase db = getDatabase();
         if (db == null) return false;
-
         MongoCollection<Document> users = db.getCollection(USERS_COLLECTION);
+        if (users.find(eq("username", username)).first() != null) return false;
 
-        // 1. Check if username already exists
-        if (users.find(eq("username", username)).first() != null) {
-            return false; // User already exists
-        }
-
-        // 2. Create the new user document
         Document newUser = new Document("username", username)
                 .append("password", password)
                 .append("role", role)
-                .append("status", "Pending"); // Default status for approval logic
-
+                .append("status", "Pending");
         users.insertOne(newUser);
         return true;
     }
     
+    // --- ADMIN USER METHODS (New!) ---
+    
+    public static List<Document> getAllUsers() {
+        MongoDatabase db = getDatabase();
+        if (db == null) return new ArrayList<>();
+        return db.getCollection(USERS_COLLECTION).find().into(new ArrayList<>());
+    }
+
+    public static void approveUser(ObjectId userId) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return;
+        db.getCollection(USERS_COLLECTION).updateOne(eq("_id", userId), set("status", "Approved"));
+    }
+
     // --- PRODUCT METHODS ---
     
-    /**
-     * Adds a new product to the inventory.
-     * Status is calculated automatically based on quantity.
-     */
+    public static Document findProductByName(String name) {
+        MongoDatabase db = getDatabase();
+        if (db == null) return null;
+        // Symbol-safe regex search
+        Pattern regex = Pattern.compile("^" + Pattern.quote(name.trim()) + "$", Pattern.CASE_INSENSITIVE);
+        return db.getCollection(PRODUCTS_COLLECTION).find(eq("name", regex)).first();
+    }
+
     public static boolean addProduct(String name, String category, double price, int quantity, 
                                      double height, double width, double weight, String imagePath) {
+        if (findProductByName(name) != null) return false; // Duplicate check
+
         MongoDatabase db = getDatabase();
         if (db == null) return false;
 
-        // This saves to the "products" collection, separate from "users"
-        MongoCollection<Document> products = db.getCollection("products");
+        String status = (quantity == 0) ? "No Stock" : (quantity <= 5 ? "Low Stock" : "In Stock");
 
-        // 1. Calculate Status Logic
-        String status;
-        if (quantity == 0) {
-            status = "No Stock";
-        } else if (quantity <= 5) {
-            status = "Low Stock";
-        } else {
-            status = "In Stock";
-        }
-
-        // 2. Create Document
-        Document newProduct = new Document("name", name)
+        Document newProduct = new Document("name", name.trim())
                 .append("category", category)
                 .append("price", price)
                 .append("quantity", quantity)
@@ -111,45 +99,36 @@ public class Database {
                                             .append("width", width)
                                             .append("weight", weight))
                 .append("status", status)
-                .append("imagePath", imagePath); // We save the file path string
+                .append("imagePath", imagePath);
 
         try {
-            products.insertOne(newProduct);
+            db.getCollection(PRODUCTS_COLLECTION).insertOne(newProduct);
             return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
         }
     }
-    // --- NEW METHODS FOR GALLERY & EDITING ---
 
-    /**
-     * Fetches products. If category is "All", returns everything.
-     */
-    public static java.util.List<Document> getProducts(String categoryFilter) {
+    public static List<Document> getProducts(String categoryFilter) {
         MongoDatabase db = getDatabase();
-        if (db == null) return new java.util.ArrayList<>();
-
-        MongoCollection<Document> products = db.getCollection("products");
+        if (db == null) return new ArrayList<>();
         
+        MongoCollection<Document> products = db.getCollection(PRODUCTS_COLLECTION);
         if (categoryFilter == null || categoryFilter.equals("All")) {
-            return products.find().into(new java.util.ArrayList<>());
+            return products.find().into(new ArrayList<>());
         } else {
-            return products.find(eq("category", categoryFilter)).into(new java.util.ArrayList<>());
+            return products.find(eq("category", categoryFilter)).into(new ArrayList<>());
         }
     }
 
-    /**
-     * Updates an existing product.
-     */
-    public static boolean updateProduct(org.bson.types.ObjectId id, String name, String category, 
+    public static boolean updateProduct(ObjectId id, String name, String category, 
                                         double price, int quantity, double h, double w, double weight) {
         MongoDatabase db = getDatabase();
         if (db == null) return false;
 
         String status = (quantity == 0) ? "No Stock" : (quantity <= 5 ? "Low Stock" : "In Stock");
-
-        Document updateDoc = new Document("name", name)
+        Document updateDoc = new Document("name", name.trim())
                 .append("category", category)
                 .append("price", price)
                 .append("quantity", quantity)
@@ -157,37 +136,21 @@ public class Database {
                 .append("dimensions.height", h)
                 .append("dimensions.width", w)
                 .append("dimensions.weight", weight);
-        // Note: We are not updating the image path here for simplicity, but you could add it.
 
         try {
-            db.getCollection("products").updateOne(eq("_id", id), new Document("$set", updateDoc));
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    /**
-     * Deletes a product.
-     */
-    public static boolean deleteProduct(org.bson.types.ObjectId id) {
-        try {
-            getDatabase().getCollection("products").deleteOne(eq("_id", id));
+            db.getCollection(PRODUCTS_COLLECTION).updateOne(eq("_id", id), new Document("$set", updateDoc));
             return true;
         } catch (Exception e) {
             return false;
         }
     }
-    // --- IMPORT HELPERS ---
-
-    /**
-     * Finds a product by exact name (case-insensitive) to check for duplicates.
-     */
-    public static Document findProductByName(String name) {
-        MongoDatabase db = getDatabase();
-        if (db == null) return null;
-        // Use regex for case-insensitive search (so "Sofa" matches "sofa")
-        return db.getCollection("products").find(eq("name", java.util.regex.Pattern.compile("^" + name + "$", java.util.regex.Pattern.CASE_INSENSITIVE))).first();
+    
+    public static boolean deleteProduct(ObjectId id) {
+        try {
+            getDatabase().getCollection(PRODUCTS_COLLECTION).deleteOne(eq("_id", id));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

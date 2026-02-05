@@ -50,6 +50,15 @@ public class OutgoingPanel extends JPanel {
 
         // Load data initially
         refreshData();
+
+        // --- THE FIX: AUTO-REFRESH LISTENER ---
+        // Reloads data every time this tab is clicked/shown
+        this.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentShown(java.awt.event.ComponentEvent e) {
+                refreshData();
+            }
+        });
     }
 
     // ==========================================

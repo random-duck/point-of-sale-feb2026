@@ -1,8 +1,8 @@
 {
     "java.project.referencedLibraries": [
         "lib/**/*.jar",
-        "c:\\Users\\MATT\\Downloads\\mongodb-driver-sync-5.7.0-alpha0.jar",
-        "c:\\Users\\MATT\\Downloads\\bson-5.7.0-alpha0.jar",
-        "c:\\Users\\MATT\\Downloads\\mongodb-driver-core-5.7.0-alpha0.jar"
+        "bson-5.7.0-alpha0.jar",
+        "mongodb-driver-core-5.7.0-alpha0.jar",
+        "mongodb-driver-sync-5.7.0-alpha0.jar"
     ]
 }

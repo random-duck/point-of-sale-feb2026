@@ -13,7 +13,8 @@ public class CSVExporter {
 
             // 1. Write Headers
             for (int i = 0; i < model.getColumnCount(); i++) {
-                csv.write(model.getColumnName(i) + ",");
+                csv.write(escapeCSV(model.getColumnName(i)));
+                if (i < model.getColumnCount() - 1) csv.write(",");
             }
             csv.write("\n");
 
@@ -22,8 +23,10 @@ public class CSVExporter {
                 for (int j = 0; j < model.getColumnCount(); j++) {
                     Object data = model.getValueAt(i, j);
                     String val = (data == null) ? "" : data.toString();
-                    // Escape commas in data (e.g. "Sofa, Red")
-                    csv.write("\"" + val + "\",");
+                    
+                    csv.write(escapeCSV(val));
+                    
+                    if (j < model.getColumnCount() - 1) csv.write(",");
                 }
                 csv.write("\n");
             }
@@ -34,5 +37,17 @@ public class CSVExporter {
             e.printStackTrace();
             return false;
         }
+    }
+
+    /**
+     * Standard CSV Escaping:
+     * - Wrap content in quotes
+     * - If content has quotes, double them (" -> "")
+     */
+    private static String escapeCSV(String val) {
+        if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
+            return "\"" + val.replace("\"", "\"\"") + "\"";
+        }
+        return val;
     }
 }
