@@ -6,7 +6,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class AddProductPanel extends JPanel {
 
-    private String selectedImagePath = "";
+    // Store the actual file object, not just path
+    private File selectedFile = null; 
     private JLabel imagePathLabel;
 
     public AddProductPanel() {
@@ -90,9 +91,8 @@ public class AddProductPanel extends JPanel {
             
             int returnVal = chooser.showOpenDialog(this);
             if(returnVal == JFileChooser.APPROVE_OPTION) {
-                File file = chooser.getSelectedFile();
-                selectedImagePath = file.getAbsolutePath();
-                imagePathLabel.setText(file.getName());
+                selectedFile = chooser.getSelectedFile(); // Store File Object
+                imagePathLabel.setText(selectedFile.getName());
             }
         });
 
@@ -155,13 +155,18 @@ public class AddProductPanel extends JPanel {
 
             String name = nameField.getText();
             String cat = catBox.getSelectedItem().toString();
+            
+            // --- THE FIX: ENCODE IMAGE TO BASE64 STRING ---
+            String imageString = "";
+            if (selectedFile != null && selectedFile.exists()) {
+                imageString = ImageUtils.encodeImage(selectedFile);
+            }
+            // ----------------------------------------------
 
-            boolean success = Database.addProduct(name, cat, price, quantity, height, width, weight, selectedImagePath);
+            boolean success = Database.addProduct(name, cat, price, quantity, height, width, weight, imageString);
 
             if (success) {
-                // --- TRACK PERFORMANCE (Incoming) ---
                 Database.saveActionLog(Session.currentUsername, "Incoming", quantity);
-                // ------------------------------------
 
                 JOptionPane.showMessageDialog(this, "Item Added Successfully!");
                 nameField.setText("");
@@ -171,7 +176,7 @@ public class AddProductPanel extends JPanel {
                 wField.setText("");
                 weightField.setText("");
                 imagePathLabel.setText("No file selected");
-                selectedImagePath = "";
+                selectedFile = null;
             } else {
                 JOptionPane.showMessageDialog(this, "Database Error: Could not save item.");
             }

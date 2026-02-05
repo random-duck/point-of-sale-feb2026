@@ -1,204 +1,271 @@
 import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
 import java.util.List;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 
 public class ProductGalleryPanel extends JPanel {
 
-    // Components
+    private JPanel gridPanel;
+    private JTextField searchField;
     private JComboBox<String> filterBox;
-    private JPanel cardViewPanel; // Holds the grid of images
-    private JTable tableView; // Holds the list data
-    private DefaultTableModel tableModel;
-    
-    // Layout Manager for swapping views
-    private CardLayout viewLayout = new CardLayout();
-    private JPanel centerPanel = new JPanel(viewLayout);
 
     public ProductGalleryPanel() {
         setLayout(new BorderLayout());
         setBackground(Theme.COLOR_CREAM);
 
-        // --- 1. TOP TOOLBAR (Filter & Toggle) ---
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        toolbar.setBackground(Theme.COLOR_CREAM);
-        toolbar.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.COLOR_GREEN));
-
-        // Filter Label
-        JLabel filterLbl = new JLabel("Category: ");
-        filterLbl.setFont(Theme.FONT_BOLD);
+        // --- TOP BAR ---
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        topBar.setBackground(Theme.COLOR_CREAM);
         
-        // Filter Dropdown
-        String[] filters = {"All", "Furniture", "Utensils", "Appliances", "Electronics", "Decor", "N/A"};
-        filterBox = new JComboBox<>(filters);
-        filterBox.addActionListener(e -> loadData()); // Refresh when changed
+        JLabel title = new JLabel("PRODUCT GALLERY");
+        title.setFont(Theme.FONT_TITLE);
+        title.setForeground(Theme.COLOR_DARK);
 
-        // Toggle Button
-        JToggleButton toggleBtn = new JToggleButton("Switch to List View");
-        toggleBtn.setBackground(Theme.COLOR_GREEN);
-        toggleBtn.setForeground(Color.WHITE);
-        toggleBtn.addActionListener(e -> {
-            if (toggleBtn.isSelected()) {
-                viewLayout.show(centerPanel, "TABLE");
-                toggleBtn.setText("Switch to Gallery View");
-            } else {
-                viewLayout.show(centerPanel, "GALLERY");
-                toggleBtn.setText("Switch to List View");
-            }
-        });
-
-        toolbar.add(filterLbl);
-        toolbar.add(filterBox);
-        toolbar.add(Box.createHorizontalStrut(50)); // Spacer
-        toolbar.add(toggleBtn);
-
-        add(toolbar, BorderLayout.NORTH);
-
-
-        // --- 2. CENTER PANEL (Views) ---
+        searchField = new JTextField(20);
+        JButton searchBtn = new JButton("Search");
+        searchBtn.setBackground(Theme.COLOR_DARK);
+        searchBtn.setForeground(Color.WHITE);
         
-        // VIEW A: Gallery Grid
-        cardViewPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 20)); // Flow layout wraps items
-        cardViewPanel.setBackground(Theme.COLOR_CREAM);
-        JScrollPane galleryScroll = new JScrollPane(cardViewPanel);
-        galleryScroll.getVerticalScrollBar().setUnitIncrement(16); // Smooth scrolling
+        String[] cats = {"All", "Furniture", "Utensils", "Appliances", "Electronics", "Decor", "N/A"};
+        filterBox = new JComboBox<>(cats);
         
-        // VIEW B: Table List
-        String[] cols = {"Name", "Category", "Price", "Qty", "Status", "Height", "Width", "Weight"};
-        tableModel = new DefaultTableModel(cols, 0);
-        tableView = new JTable(tableModel);
-        JScrollPane tableScroll = new JScrollPane(tableView);
+        topBar.add(title);
+        topBar.add(new JLabel("   Filter:"));
+        topBar.add(filterBox);
+        topBar.add(new JLabel("   Search:"));
+        topBar.add(searchField);
+        topBar.add(searchBtn);
+        
+        add(topBar, BorderLayout.NORTH);
 
-        // Add both to the CardLayout stack
-        centerPanel.add(galleryScroll, "GALLERY");
-        centerPanel.add(tableScroll, "TABLE");
+        // --- GRID AREA ---
+        gridPanel = new JPanel(new GridLayout(0, 4, 10, 10)); 
+        gridPanel.setBackground(Theme.COLOR_CREAM);
+        gridPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        add(centerPanel, BorderLayout.CENTER);
+        JScrollPane scrollPane = new JScrollPane(gridPanel);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrollPane, BorderLayout.CENTER);
 
-        // Load initial data
-        loadData();
-
-        // --- THE FIX: AUTO-REFRESH LISTENER ---
-        // Reloads data every time this tab is clicked/shown
+        // --- ACTIONS ---
+        searchBtn.addActionListener(e -> loadProducts());
+        filterBox.addActionListener(e -> loadProducts());
+        
         this.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentShown(java.awt.event.ComponentEvent e) {
-                loadData();
-            }
+            public void componentShown(java.awt.event.ComponentEvent e) { loadProducts(); }
         });
+
+        loadProducts();
     }
 
-    // --- DATA LOADING LOGIC ---
-    private void loadData() {
-        // 1. Clear existing data
-        cardViewPanel.removeAll();
-        tableModel.setRowCount(0);
+    private void loadProducts() {
+        gridPanel.removeAll();
+        
+        String cat = filterBox.getSelectedItem().toString();
+        List<Document> products = Database.getProducts(cat);
+        String search = searchField.getText().toLowerCase();
 
-        // 2. Fetch from DB
-        String selectedCat = filterBox.getSelectedItem().toString();
-        List<Document> products = Database.getProducts(selectedCat);
+        for (Document p : products) {
+            if (!search.isEmpty() && !p.getString("name").toLowerCase().contains(search)) continue;
 
-        // 3. Populate Views
-        for (Document doc : products) {
-            // Add to Table
-            addTableRow(doc);
+            JPanel wrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            wrapper.setBackground(Theme.COLOR_CREAM);
+            wrapper.add(createProductCard(p));
             
-            // Add to Gallery
-            addProductCard(doc);
+            gridPanel.add(wrapper);
+        }
+        
+        while (gridPanel.getComponentCount() < 4) {
+            JPanel placeholder = new JPanel();
+            placeholder.setOpaque(false);
+            gridPanel.add(placeholder);
         }
 
-        // 4. Refresh UI
-        cardViewPanel.revalidate();
-        cardViewPanel.repaint();
+        gridPanel.revalidate();
+        gridPanel.repaint();
     }
 
-    private void addTableRow(Document doc) {
-        Document dims = (Document) doc.get("dimensions");
-        tableModel.addRow(new Object[]{
-            doc.getString("name"),
-            doc.getString("category"),
-            doc.getDouble("price"),
-            doc.getInteger("quantity"),
-            doc.getString("status"),
-            dims != null ? dims.getDouble("height") : 0,
-            dims != null ? dims.getDouble("width") : 0,
-            dims != null ? dims.getDouble("weight") : 0
-        });
-    }
-
-    private void addProductCard(Document doc) {
-        // Create a mini panel for the product
-        JPanel card = new JPanel();
-        card.setPreferredSize(new Dimension(220, 300));
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+    private JPanel createProductCard(Document p) {
+        JPanel card = new JPanel(new BorderLayout());
         card.setBackground(Color.WHITE);
-        card.setBorder(BorderFactory.createLineBorder(Theme.COLOR_GREEN, 1));
-        card.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        card.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+        card.setPreferredSize(new Dimension(220, 280));
 
-        // Image
-        JLabel imgLbl = new JLabel();
-        imgLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
-        String path = doc.getString("imagePath");
+        // 1. IMAGE
+        JLabel imgLabel = new JLabel();
+        imgLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        imgLabel.setPreferredSize(new Dimension(220, 150));
         
-        if (path != null && !path.isEmpty()) {
-            // Load and scale image safely
-            try {
-                ImageIcon icon = new ImageIcon(path);
-                Image img = icon.getImage().getScaledInstance(200, 180, Image.SCALE_SMOOTH);
-                imgLbl.setIcon(new ImageIcon(img));
-            } catch (Exception e) {
-                imgLbl.setText("Image Error");
-            }
-        } else {
-            imgLbl.setText("No Image");
-            imgLbl.setPreferredSize(new Dimension(200, 180));
-            imgLbl.setHorizontalAlignment(SwingConstants.CENTER);
+        String imageString = p.getString("imagePath");
+        ImageIcon icon = null;
+        if (imageString != null && !imageString.isEmpty()) {
+            icon = ImageUtils.decodeImage(imageString);
         }
 
-        // Text Info
-        JLabel nameLbl = new JLabel(doc.getString("name"));
-        nameLbl.setFont(Theme.FONT_BOLD);
-        nameLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        if (icon == null) {
+            imgLabel.setText("No Image");
+            imgLabel.setBackground(Color.decode("#EEEEEE"));
+            imgLabel.setOpaque(true);
+        } else {
+            imgLabel.setIcon(icon);
+        }
+        card.add(imgLabel, BorderLayout.CENTER);
 
-        JLabel priceLbl = new JLabel("PHP " + doc.getDouble("price"));
-        priceLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 2. INFO
+        JPanel info = new JPanel(new GridLayout(3, 1));
+        info.setBackground(Color.WHITE);
+        info.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 5));
         
-        JLabel statusLbl = new JLabel(doc.getString("status"));
-        statusLbl.setFont(new Font("SansSerif", Font.BOLD, 12));
-        statusLbl.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel nameLbl = new JLabel(p.getString("name"));
+        nameLbl.setFont(Theme.FONT_BOLD);
+        
+        JLabel priceLbl = new JLabel("PHP " + String.format("%,.2f", p.getDouble("price")));
+        priceLbl.setForeground(Theme.COLOR_GREEN);
+        
+        JLabel stockLbl = new JLabel("Stock: " + p.getInteger("quantity"));
+        if (p.getInteger("quantity") <= 5) stockLbl.setForeground(Color.RED);
 
-        // Color code status
-        String status = doc.getString("status");
-        if ("No Stock".equals(status)) statusLbl.setForeground(Color.RED);
-        else if ("Low Stock".equals(status)) statusLbl.setForeground(Color.ORANGE);
-        else statusLbl.setForeground(Theme.COLOR_GREEN);
+        info.add(nameLbl);
+        info.add(priceLbl);
+        info.add(stockLbl);
+        card.add(info, BorderLayout.SOUTH);
+        
+        // 3. CLICKS (THE FIX: Timer Logic)
+        MouseAdapter listener = new MouseAdapter() {
+            private Timer clickTimer; // To distinguish single vs double click
 
-        // Add to card
-        card.add(Box.createRigidArea(new Dimension(0, 10)));
-        card.add(imgLbl);
-        card.add(Box.createRigidArea(new Dimension(0, 10)));
-        card.add(nameLbl);
-        card.add(priceLbl);
-        card.add(statusLbl);
-
-        // CLICK EVENT: Open Details Popup
-        card.addMouseListener(new MouseAdapter() {
-            @Override
             public void mouseClicked(MouseEvent e) {
-                JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(ProductGalleryPanel.this);
-                ProductDetailDialog dialog = new ProductDetailDialog(parentFrame, doc);
-                dialog.setVisible(true);
+                if (!Session.isAdmin()) return; 
 
-                // If user saved changes or deleted, reload the whole grid
-                if (dialog.isDataChanged()) {
-                    loadData();
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    // Right Click: DELETE
+                    int choice = JOptionPane.showConfirmDialog(ProductGalleryPanel.this, "Delete " + p.getString("name") + "?");
+                    if (choice == JOptionPane.YES_OPTION) {
+                        Database.deleteProduct(p.getObjectId("_id"));
+                        loadProducts();
+                    }
+                } else if (SwingUtilities.isLeftMouseButton(e)) {
+                    if (e.getClickCount() == 2) {
+                        // DOUBLE CLICK: Stop timer and show Full Edit
+                        if (clickTimer != null && clickTimer.isRunning()) {
+                            clickTimer.stop();
+                        }
+                        showFullEditDialog(p);
+                    } else if (e.getClickCount() == 1) {
+                        // SINGLE CLICK: Start timer, wait 300ms
+                        clickTimer = new Timer(300, evt -> {
+                            showQuickEditDialog(p);
+                        });
+                        clickTimer.setRepeats(false);
+                        clickTimer.start();
+                    }
                 }
             }
+        };
+        
+        card.addMouseListener(listener);
+        imgLabel.addMouseListener(listener);
+        info.addMouseListener(listener);
+        nameLbl.addMouseListener(listener);
+
+        return card;
+    }
+
+    // --- QUICK EDIT ---
+    private void showQuickEditDialog(Document p) {
+        JTextField priceField = new JTextField(String.valueOf(p.getDouble("price")));
+        JTextField stockField = new JTextField(String.valueOf(p.getInteger("quantity")));
+        
+        Object[] message = {
+            "Quick Edit: " + p.getString("name"),
+            "New Price:", priceField,
+            "New Stock:", stockField
+        };
+
+        int option = JOptionPane.showConfirmDialog(this, message, "Quick Edit", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                double newPrice = Double.parseDouble(priceField.getText());
+                int newStock = Integer.parseInt(stockField.getText());
+                Document dims = (Document) p.get("dimensions");
+                
+                Database.updateProduct(p.getObjectId("_id"), p.getString("name"), p.getString("category"), 
+                                       newPrice, newStock, 
+                                       dims.getDouble("height"), dims.getDouble("width"), dims.getDouble("weight"));
+                
+                loadProducts(); 
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid Numbers");
+            }
+        }
+    }
+
+    // --- FULL EDIT ---
+    private void showFullEditDialog(Document p) {
+        JTextField nameF = new JTextField(p.getString("name"));
+        JTextField priceF = new JTextField(String.valueOf(p.getDouble("price")));
+        JTextField qtyF = new JTextField(String.valueOf(p.getInteger("quantity")));
+        
+        String[] cats = {"Furniture", "Utensils", "Appliances", "Electronics", "Decor", "N/A"};
+        JComboBox<String> catBox = new JComboBox<>(cats);
+        catBox.setSelectedItem(p.getString("category"));
+
+        Document dims = (Document) p.get("dimensions");
+        JTextField hF = new JTextField(String.valueOf(dims.getDouble("height")));
+        JTextField wF = new JTextField(String.valueOf(dims.getDouble("width")));
+        JTextField weightF = new JTextField(String.valueOf(dims.getDouble("weight")));
+
+        // Image Handling
+        JLabel imgStatus = new JLabel("Current Image Kept");
+        final String[] newImageCode = { p.getString("imagePath") }; 
+        
+        JButton changeImgBtn = new JButton("Change Image...");
+        changeImgBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileFilter(new FileNameExtensionFilter("Images", "jpg", "png", "jpeg"));
+            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File f = chooser.getSelectedFile();
+                newImageCode[0] = ImageUtils.encodeImage(f); 
+                imgStatus.setText("New Image Selected: " + f.getName());
+            }
         });
 
-        cardViewPanel.add(card);
+        Object[] message = {
+            "Product Name:", nameF,
+            "Category:", catBox,
+            "Price:", priceF,
+            "Stock:", qtyF,
+            "Height:", hF,
+            "Width:", wF,
+            "Weight:", weightF,
+            "Image:", changeImgBtn,
+            imgStatus
+        };
+
+        int option = JOptionPane.showConfirmDialog(this, message, "Full Product Details", JOptionPane.OK_CANCEL_OPTION);
+        if (option == JOptionPane.OK_OPTION) {
+            try {
+                double price = Double.parseDouble(priceF.getText());
+                int qty = Integer.parseInt(qtyF.getText());
+                double h = Double.parseDouble(hF.getText());
+                double w = Double.parseDouble(wF.getText());
+                double weight = Double.parseDouble(weightF.getText());
+                
+                // Re-add to update image
+                Database.deleteProduct(p.getObjectId("_id"));
+                Database.addProduct(nameF.getText(), catBox.getSelectedItem().toString(), 
+                                    price, qty, h, w, weight, newImageCode[0]);
+                
+                loadProducts();
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Error updating product. Check your numbers.");
+            }
+        }
     }
 }
